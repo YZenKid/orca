@@ -30,6 +30,10 @@ import type { AcpStructuredOptions } from '../../options/acp-structured-options'
 import type { AcpStructuredPrompts } from '../../requests/acp-structured-prompts'
 import { acpSessionStartMeta } from '../../launch/acp-session-meta'
 import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-adapter-deps'
+import type { AcpLaunchSpec } from '../../launch/acp-launch-contract'
+import type { AcpMcpServersRead } from '../../launch/acp-mcp-servers'
+
+
 import { AcpStructuredTurns } from '../../turns/acp-structured-turns'
 import type { AcpStructuredTurnsDeps } from '../../turns/acp-turn-dispatch-contract'
 import { acpNoModelSelected } from '../../turns/acp-model-command'
@@ -38,6 +42,11 @@ import {
   isAcpReadySession,
   type AcpStructuredChild
 } from '../children/acp-structured-child'
+
+const EMPTY_MCP_SERVERS: AcpMcpServersRead = { servers: [], skipped: [] }
+
+/** A skipped MCP server is a person-visible gap, not an internal detail. */
+const ACP_MCP_SERVERS_SKIPPED = 'acp.mcp_servers_skipped'
 
 type AcpHandshakeInput = {
   acquire: StructuredAgentSessionAcquireInput
@@ -87,6 +96,19 @@ export async function initializeAcpStructuredSession(
     env: launch.env,
     antigravityChatAuth: launch.antigravityChatAuth
   })
+  // Read on the machine the agent runs on, before the session starts. A missing or broken file
+  // must not cost the chat its session, so the resolver never fails the start.
+  const mcp = await readSpecMcpServers(spec, launch)
+  if (mcp.skipped.length > 0) {
+    // A server the person configured but this chat cannot start as written must be visible: the
+    // alternative is a tool that silently does not exist.
+    deps.logger?.warn(ACP_MCP_SERVERS_SKIPPED, {
+      scope: 'acp-mcp-servers',
+      agent: spec.agent,
+      skipped: mcp.skipped
+    })
+  }
+  const mcpServers = mcp.servers
   const setup = {
     ...acpSessionStartMeta(spec, meta),
     authMethodId,
@@ -115,7 +137,7 @@ export async function initializeAcpStructuredSession(
           const attaching = input.lanes.create(resume.sessionId, true)
           liveLane = attaching
           const opened = await connection.start(
-            { cwd, mcpServers: [], sessionId: resume.sessionId, ...setup },
+            { cwd, mcpServers, sessionId: resume.sessionId, ...setup },
             acceptSession
           )
           assertStarting()
@@ -173,7 +195,7 @@ export async function initializeAcpStructuredSession(
   if (!started || !liveLane) {
     liveLane?.dispose()
     input.lanes.clear()
-    started = await connection.start({ cwd: launch.cwd, mcpServers: [], ...setup }, acceptSession)
+    started = await connection.start({ cwd: launch.cwd, mcpServers, ...setup }, acceptSession)
     assertStarting()
   }
   if (!liveLane) {
@@ -286,5 +308,18 @@ export async function initializeAcpStructuredSession(
     link,
     reportedOptions: options.observedCurrent(child.permissionModes),
     catalogListing: options.startListing()
+  }
+}
+
+/** An agent's own MCP servers, or none: a file that cannot be read or parsed leaves the chat
+ *  starting exactly as it did before the spec named any. */
+async function readSpecMcpServers(
+  spec: AcpLaunchSpec,
+  launch: AcpStructuredLaunch
+): Promise<AcpMcpServersRead> {
+  try {
+    return (await spec.mcpServers?.({ cwd: launch.cwd, env: launch.env })) ?? EMPTY_MCP_SERVERS
+  } catch {
+    return EMPTY_MCP_SERVERS
   }
 }

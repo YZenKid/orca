@@ -1,5 +1,6 @@
 import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { AcpMcpServersRead } from './acp-mcp-servers'
 import type { AcpHistoryTurnIdentity } from '../history/acp-history-replay'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { AcpAccountBinding } from './acp-account-binding'
@@ -91,6 +92,13 @@ export type AcpLaunchSpec = {
     env: Readonly<Record<string, string>>
     signal?: AbortSignal
   }): Promise<Readonly<Record<string, unknown>> | undefined>
+  /** The MCP servers a chat passes when it creates or reopens a session. In ACP the host owns MCP
+   *  configuration: an agent that reads its own files already has them, and one that ignores them
+   *  (OMP does, by design) needs them here. Absent passes none. */
+  mcpServers?(input: {
+    cwd: string
+    env: Readonly<Record<string, string>>
+  }): Promise<AcpMcpServersRead>
   launchGate?: AcpLaunchGate
   /** Writes sessions it cannot delete into the user's own history, so it runs no naming tasks. */
   keepsEverySession?: true

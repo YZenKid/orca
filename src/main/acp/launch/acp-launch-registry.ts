@@ -25,6 +25,7 @@ import { OPENCODE_SESSION_HISTORY } from '../../opencode/transcripts/opencode-se
 import { OPENCODE_TRANSCRIPT_IMPORT } from '../../opencode/transcripts/opencode-transcript-import'
 import { assertOpenCodeCopyUsesLocalStore } from '../../../shared/agent-launch/startup/opencode-launch-command'
 import { OMP_SESSION_HISTORY } from '../../omp/omp-session-history'
+import { ompMcpServerFiles, readAcpMcpServers } from './acp-mcp-servers'
 import { OMP_TRANSCRIPT_IMPORT } from '../../omp/omp-transcript-import'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'
 import { COPILOT_LAUNCH_SPEC } from '../../copilot/copilot-acp-launch-spec'
@@ -150,7 +151,10 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   compaction: true,
   compactionInstructions: true,
   transcriptImport: OMP_TRANSCRIPT_IMPORT,
-  sessionHistory: OMP_SESSION_HISTORY
+  sessionHistory: OMP_SESSION_HISTORY,
+  // `omp acp` ignores OMP's own MCP files by design, so the chat passes what its terminal lane
+  // would read. Nothing in an ACP session reaches those servers otherwise.
+  mcpServers: ({ cwd, env }) => readAcpMcpServers(ompMcpServerFiles({ cwd, env }), env)
 }
 
 export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
